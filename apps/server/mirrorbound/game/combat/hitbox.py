@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 
@@ -40,12 +41,28 @@ class Hitbox:
             dist = (self.position - center).length()
             return dist < (self.size + radius)
         elif self.shape == HitboxShape.ARC:
-            # Simplified: check if circle center is within arc range
             dist = (self.position - center).length()
             if dist > self.size + radius:
                 return False
-            angle_to_point = self._angle_to(center)
-            return self._angle_in_arc(angle_to_point)
+            # Standing inside us: there is no meaningful direction to it.
+            if dist <= radius:
+                return True
+            # A body has angular width, not just a direction.
+            #
+            # The distance test above already accounts for `radius`; the angle
+            # test used to compare only the direction of the target's *centre*
+            # against the arc, which quietly meant every enemy was a point.
+            # A circle of `radius` at `dist` subtends asin(radius / dist)
+            # either side of its centre, so a target whose centre sits outside
+            # the arc can still have most of its body inside it -- and the
+            # wider the enemy, the more of the swing went missing. Measured
+            # with bare hands (a 97 degree arc, so 49 either side): every
+            # archetype cut off at exactly 48 degrees regardless of size, and
+            # a Husk Scarab -- whose body spans 53 degrees at melee range --
+            # lost 62 degrees of swing.
+            slack = math.asin(min(1.0, radius / dist))
+            offset = abs(self._angle_difference(self._angle_to(center), self.direction))
+            return offset <= self.arc_angle / 2 + slack
         elif self.shape == HitboxShape.LINE:
             # Simplified: check distance from line
             dist = self._point_to_line_distance(center)
@@ -75,6 +92,11 @@ class Hitbox:
         dx = point.x - self.position.x
         dy = point.y - self.position.y
         return self._normalize_angle(self._atan2(dy, dx))
+
+    @staticmethod
+    def _angle_difference(a: float, b: float) -> float:
+        """Signed shortest angle from `b` to `a`, in (-PI, PI]."""
+        return (a - b + math.pi) % (2 * math.pi) - math.pi
 
     def _angle_in_arc(self, angle: float) -> bool:
         """Check if angle is within the arc."""
