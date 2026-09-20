@@ -61,7 +61,24 @@ class EnemyDef:
     attack_cooldown: float
     attack_windup: float
     behavior: EnemyBehavior
+    # Physics radius: how much room this body takes up. Separation between
+    # crowding enemies, the wall clamp, and how close something has to get to
+    # swing at you all use this.
     size: float
+    # Damage radius: how big a target it is. Defaults to `size` when unset.
+    #
+    # Split from `size` because one number could not be both. These sizes were
+    # authored against the old procedural blobs, which were round, so one
+    # number worked. Logesh's sheets are not round -- the Husk Scarab is drawn
+    # 96x35, the Gloom Hound 91x44 -- and a circle scaled to a scarab's body
+    # would have scarabs shoving each other apart from twice the distance,
+    # which is the opposite of a swarm. Measured before this: a straight shot
+    # registered on only 27% of a scarab's visible width, 35% of a hound's and
+    # 48% of the Mirror's; arrows went through the drawn body and missed.
+    #
+    # The values are the mean of the drawn body's two semi-axes, so a flat
+    # sprite does not get an absurdly deep circle and a tall one does not get
+    # a narrow one. Recompute them if the art is redrawn.
     xp_reward: int
     sprite: str
     tags: tuple[str, ...] = ()
@@ -72,6 +89,27 @@ class EnemyDef:
     elite: bool = False
     boss: bool = False
     role: str = "melee"                # melee | ranged | fast | tank | boss (client + twin read this)
+    # Damage radius: how big a target it is. Defaults to `size` when unset.
+    #
+    # Split from `size` because one number could not be both. These sizes were
+    # authored against the old procedural blobs, which were round, so one
+    # number worked. Logesh's sheets are not round -- the Husk Scarab is drawn
+    # 96x35, the Gloom Hound 91x44 -- and widening `size` to match would have
+    # scarabs shoving each other apart from twice the distance, which is the
+    # opposite of a swarm. Measured before the split: a straight shot
+    # registered on only 27% of a scarab's visible width, 35% of a hound's,
+    # 48% of the Mirror's -- arrows passed through the drawn body and missed.
+    #
+    # Sized off the drawn body's *width*, never below `size`. Width, because
+    # the sheets are drawn side-on in a top-down world: the horizontal extent
+    # is ground the creature occupies, while the vertical extent is mostly
+    # height, and you cannot miss over something's head here. Taking the mean
+    # of both semi-axes was tried first and overshot the tall, narrow ones --
+    # an archer became hittable 71% beyond its own sprite.
+    #
+    # Recompute if the art is redrawn: half of the idle sheet's trimmed frame
+    # width, times the client's scale for that enemy.
+    hit_radius: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -88,7 +126,7 @@ SKELETON = EnemyDef(
     id="skeleton", name="Bone Knight", health=62, damage=11, speed=92,
     attack_range=44, aggro_range=260, attack_cooldown=1.3, attack_windup=0.42,
     behavior=EnemyBehavior.CHARGE, size=14, xp_reward=24, sprite="skeleton",
-    tags=("MELEE",), knockback=140, loot=LootTable(1, 3, 0.05, 0.10, 0.06), role="melee",
+    tags=("MELEE",), knockback=140, loot=LootTable(1, 3, 0.05, 0.10, 0.06), role="melee", hit_radius=17
 )
 
 ARCHER = EnemyDef(
@@ -97,14 +135,14 @@ ARCHER = EnemyDef(
     behavior=EnemyBehavior.KEEP_DISTANCE, size=12, xp_reward=28, sprite="archer",
     tags=("RANGED",), knockback=60,
     projectile=ProjectileSpec(kind="bone_arrow", speed=330, radius=5, lifetime=1.6),
-    loot=LootTable(1, 3, 0.08, 0.08, 0.10), role="ranged",
+    loot=LootTable(1, 3, 0.08, 0.08, 0.10), role="ranged", hit_radius=14
 )
 
 HOUND = EnemyDef(
     id="hound", name="Gloom Hound", health=38, damage=9, speed=210,
     attack_range=36, aggro_range=340, attack_cooldown=0.9, attack_windup=0.22,
     behavior=EnemyBehavior.DART, size=12, xp_reward=22, sprite="hound",
-    tags=("MELEE", "FAST"), knockback=90, loot=LootTable(1, 2, 0.04, 0.06, 0.04), role="fast",
+    tags=("MELEE", "FAST"), knockback=90, loot=LootTable(1, 2, 0.04, 0.06, 0.04), role="fast", hit_radius=46
 )
 
 SLIME = EnemyDef(
@@ -112,7 +150,7 @@ SLIME = EnemyDef(
     attack_range=40, aggro_range=220, attack_cooldown=1.8, attack_windup=0.6,
     behavior=EnemyBehavior.TANK, size=18, xp_reward=34, sprite="slime",
     tags=("MELEE", "HEAVY"), knockback=200, knockback_resist=0.7,
-    loot=LootTable(2, 4, 0.10, 0.14, 0.06), role="tank",
+    loot=LootTable(2, 4, 0.10, 0.14, 0.06), role="tank", hit_radius=47
 )
 
 MIRROR = EnemyDef(
@@ -121,7 +159,7 @@ MIRROR = EnemyDef(
     behavior=EnemyBehavior.MIRROR, size=15, xp_reward=400, sprite="mirror",
     tags=("MELEE", "RANGED", "SPELL"), knockback=200, knockback_resist=0.85,
     projectile=ProjectileSpec(kind="mirror_bolt", speed=430, radius=7, lifetime=1.3),
-    loot=LootTable(12, 20, 1.0, 0.5, 0.5, relic_chance=1.0), boss=True, role="boss",
+    loot=LootTable(12, 20, 1.0, 0.5, 0.5, relic_chance=1.0), boss=True, role="boss", hit_radius=31
 )
 
 # --- added archetypes --------------------------------------------------------
@@ -137,7 +175,7 @@ ACOLYTE = EnemyDef(
     tags=("RANGED", "SPELL"), knockback=40,
     projectile=ProjectileSpec(kind="acolyte_bolt", speed=270, radius=8, lifetime=2.0,
                               slow=0.55, slow_duration=1.8),
-    loot=LootTable(2, 4, 0.12, 0.08, 0.16), role="ranged",
+    loot=LootTable(2, 4, 0.12, 0.08, 0.16), role="ranged", hit_radius=16
 )
 
 BRUTE = EnemyDef(
@@ -147,7 +185,7 @@ BRUTE = EnemyDef(
     attack_range=62, aggro_range=280, attack_cooldown=2.6, attack_windup=0.95,
     behavior=EnemyBehavior.TANK, size=22, xp_reward=58, sprite="brute",
     tags=("MELEE", "HEAVY"), knockback=300, knockback_resist=0.8,
-    loot=LootTable(4, 7, 0.25, 0.20, 0.10, weapon_chance=0.12), role="tank",
+    loot=LootTable(4, 7, 0.25, 0.20, 0.10, weapon_chance=0.12), role="tank", hit_radius=47
 )
 
 SCARAB = EnemyDef(
@@ -158,7 +196,7 @@ SCARAB = EnemyDef(
     behavior=EnemyBehavior.DART, size=9, xp_reward=8, sprite="scarab",
     tags=("MELEE", "FAST", "SWARM"), knockback=40,
     # A swarm pays per swarm, not per body, or a room of them out-earns a boss.
-    loot=LootTable(1, 1, 0.0, 0.02, 0.02, gold_min=0, gold_max=2), role="fast",
+    loot=LootTable(1, 1, 0.0, 0.02, 0.02, gold_min=0, gold_max=2), role="fast", hit_radius=48
 )
 
 WARDEN = EnemyDef(
@@ -170,7 +208,7 @@ WARDEN = EnemyDef(
     behavior=EnemyBehavior.TANK, size=26, xp_reward=260, sprite="warden",
     tags=("MELEE", "HEAVY", "GUARDIAN"), knockback=340, knockback_resist=0.85,
     loot=LootTable(10, 16, 1.0, 0.4, 0.4, weapon_chance=0.5, relic_chance=0.6),
-    elite=True, role="tank",
+    elite=True, role="tank", hit_radius=26
 )
 
 ARCHETYPES: dict[str, EnemyDef] = {
@@ -191,6 +229,7 @@ def elite_of(base: EnemyDef) -> EnemyDef:
         damage=base.damage * 1.4,
         speed=base.speed * 1.12,
         size=base.size * 1.25,
+        hit_radius=(base.hit_radius * 1.25) if base.hit_radius is not None else None,
         xp_reward=int(base.xp_reward * 2.5),
         knockback_resist=min(0.9, base.knockback_resist + 0.3),
         loot=LootTable(
@@ -250,6 +289,11 @@ class Enemy(Entity):
         self.max_health = self.enemy_def.health
         self.radius = self.enemy_def.size
         self.home = self.position.copy()
+
+    @property
+    def hit_radius(self) -> float:
+        """What a hit is tested against, as opposed to how much room it takes up."""
+        return self.enemy_def.hit_radius if self.enemy_def.hit_radius is not None else self.radius
 
     @property
     def damage(self) -> float:
@@ -312,5 +356,6 @@ class Enemy(Entity):
             "targetId": self.target_id,
             "windingUp": self.is_winding_up,
             "windup": round(self.windup_timer, 2),
+            "hitRadius": round(self.hit_radius, 1),
         })
         return base

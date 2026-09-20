@@ -90,7 +90,10 @@ class CombatSystem:
             direction=facing.angle(),
             arc_angle=weapon.arc_angle,
         )
-        hits = [e for e in state.get_active_enemies() if hitbox.overlaps_circle(e.position, e.radius)]
+        # hit_radius, not radius: how big a target it is, not how much room it
+        # takes up. See EnemyDef.hit_radius.
+        hits = [e for e in state.get_active_enemies()
+                if hitbox.overlaps_circle(e.position, e.hit_radius)]
         is_player = attacker_id == state.player.id
         dmg_mult = state.player.weapon_damage_multiplier() if is_player else 1.0
         crit_bonus = state.player.crit_chance_bonus() if is_player else 0.0
@@ -159,7 +162,7 @@ class CombatSystem:
             hitbox = Hitbox(shape=HitboxShape.ARC, position=player.position, size=ability.area,
                             direction=facing.angle(), arc_angle=ability.cone_angle)
             for enemy in state.get_active_enemies():
-                if hitbox.overlaps_circle(enemy.position, enemy.radius):
+                if hitbox.overlaps_circle(enemy.position, enemy.hit_radius):
                     dist = (enemy.position - player.position).length()
                     falloff = 1.0 - 0.35 * min(1.0, dist / max(ability.area, 1))
                     dmg = ability.damage * player.spell_damage_multiplier() * falloff
@@ -186,7 +189,7 @@ class CombatSystem:
         elif ability.type is AbilityType.NOVA:
             for enemy in state.get_active_enemies():
                 dist = (enemy.position - player.position).length()
-                if dist <= ability.area + enemy.radius:
+                if dist <= ability.area + enemy.hit_radius:
                     dmg = ability.damage * player.spell_damage_multiplier()
                     direction = (enemy.position - player.position).normalized()
                     self.damage_enemy(state, enemy, dmg, player.id, list(ability.tags), direction, 120, ability.id)
@@ -416,8 +419,8 @@ class CombatSystem:
             centre = enemy.position
             for other in state.get_active_enemies():
                 d = (other.position - centre).length()
-                if d <= projectile.aoe_radius + other.radius:
-                    falloff = 1.0 if other.id == enemy.id else max(0.45, 1.0 - d / (projectile.aoe_radius + other.radius))
+                if d <= projectile.aoe_radius + other.hit_radius:
+                    falloff = 1.0 if other.id == enemy.id else max(0.45, 1.0 - d / (projectile.aoe_radius + other.hit_radius))
                     self.damage_enemy(state, other, projectile.damage * falloff, projectile.owner_id,
                                       list(projectile.tags), (other.position - centre).normalized() if other.id != enemy.id else direction,
                                       projectile.knockback, projectile.source)

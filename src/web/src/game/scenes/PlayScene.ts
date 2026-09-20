@@ -623,8 +623,13 @@ export class PlayScene extends Phaser.Scene {
         g.lineStyle(1, e.windingUp ? 0xff4d4d : 0xffffff, e.windingUp ? 0.9 : 0.25);
         g.lineBetween(e.position.x, e.position.y, target.x, target.y);
       }
+      // Two circles, because they are two different things: the faint one is
+      // how much room the body takes up (separation, walls), the solid one is
+      // what a swing or an arrow is actually tested against.
       g.lineStyle(1, 0xffffff, 0.15);
       g.strokeCircle(e.position.x, e.position.y, e.radius);
+      g.lineStyle(1, PALETTE.gold, 0.45);
+      g.strokeCircle(e.position.x, e.position.y, e.hitRadius ?? e.radius);
     }
     // Player facing.
     const p = snap.player;

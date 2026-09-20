@@ -164,7 +164,7 @@ class TwinExecutor:
         direction = to_target.normalized() if dist > 0 else twin.facing
 
         if weapon.is_melee:
-            reach = weapon.range * 0.85 + target.radius
+            reach = weapon.range * 0.85 + target.hit_radius
             if hold_position is not None and (hold_position - twin.position).length() > 18 and dist > reach:
                 self._move_to(dt, state, hold_position)
             elif dist > reach:
@@ -172,7 +172,7 @@ class TwinExecutor:
             else:
                 twin.velocity = Vec2()
             twin.face(direction)
-            if dist <= weapon.range + target.radius and twin.can_attack():
+            if dist <= weapon.range + target.hit_radius and twin.can_attack():
                 combat.process_twin_attack(state, target)
             return
 

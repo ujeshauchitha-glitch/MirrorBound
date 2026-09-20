@@ -46,4 +46,8 @@ class CollisionSystem:
 
     @staticmethod
     def _overlap(a: Projectile, b: Entity) -> bool:
-        return (a.position - b.position).length() < a.radius + b.radius
+        # An enemy is hit against its damage radius; the player and the twin
+        # have only the one radius, so `getattr` covers both without the
+        # collision system having to know which is which.
+        target = getattr(b, "hit_radius", b.radius)
+        return (a.position - b.position).length() < a.radius + target
